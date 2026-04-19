@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SDN Forensic Dashboard — Live</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;700;800&display=swap');
+  :root {
+    --navy:#0D1B2A; --teal:#028090; --teal-light:#02A8BC;
+    --green:#1A7A4A; --green-light:#22C55E;
+    --red:#C0392B; --red-light:#EF4444;
+    --amber:#F59E0B;
+    --white:#F8FAFC; --gray:#64748B;
+    --card:#111827; --border:#1E2D3D;
+    --mono:'JetBrains Mono',monospace;
+    --sans:'Syne',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--navy);color:var(--white);font-family:var(--sans);min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(2,128,144,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(2,128,144,0.05) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+
+  /* HEADER */
+  .header{position:relative;z-index:10;padding:1rem 2rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(13,27,42,0.95);backdrop-filter:blur(10px);}
+  .logo{width:36px;height:36px;background:var(--teal);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white;font-family:var(--mono);}
+  .header-left{display:flex;align-items:center;gap:1rem;}
+  .header h1{font-size:1rem;font-weight:700;}
+  .header p{font-size:0.68rem;color:var(--gray);font-family:var(--mono);}
+  .status-badge{display:flex;align-items:center;gap:0.5rem;background:rgba(26,122,74,0.15);border:1px solid rgba(26,122,74,0.3);padding:0.35rem 0.8rem;border-radius:20px;font-size:0.7rem;font-family:var(--mono);color:var(--green-light);}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green-light);}
+  .dot.pulse{animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(0.8);}}
+
+  /* MAIN */
+  .main{position:relative;z-index:1;padding:1.2rem 2rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem;max-width:1400px;margin:0 auto;}
+
+  /* CONTROLS */
+  .ctrl{grid-column:1/-1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.4rem;display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;}
+  .ctrl-label{font-size:0.65rem;font-family:var(--mono);color:var(--gray);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem;}
+  .slider-group{display:flex;flex-direction:column;min-width:150px;}
+  input[type=range]{-webkit-appearance:none;width:100%;height:4px;background:var(--border);border-radius:2px;outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--teal);cursor:pointer;box-shadow:0 0 8px rgba(2,128,144,0.5);}
+  .sval{font-family:var(--mono);font-size:0.78rem;color:var(--teal-light);margin-top:0.2rem;}
+  .divider{width:1px;height:38px;background:var(--border);}
+  .btn{padding:0.55rem 1.2rem;border-radius:8px;border:none;font-family:var(--sans);font-size:0.82rem;font-weight:600;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:0.4rem;}
+  .btn-primary{background:var(--teal);color:white;}
+  .btn-primary:hover{background:var(--teal-light);transform:translateY(-1px);}
+  .btn-primary:disabled{background:var(--border);color:var(--gray);cursor:not-allowed;transform:none;}
+  .btn-danger{background:rgba(192,57,43,0.2);color:var(--red-light);border:1px solid rgba(192,57,43,0.3);}
+  .btn-danger:hover{background:rgba(192,57,43,0.35);}
+  .btn-stop{background:rgba(245,158,11,0.2);color:var(--amber);border:1px solid rgba(245,158,11,0.3);}
+
+  /* FILTER CARDS */
+  .fcard{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.2rem 1.4rem;display:flex;flex-direction:column;gap:0.85rem;position:relative;overflow:hidden;}
+  .fcard.bloom{border-top:2px solid var(--red);}
+  .fcard.cuckoo{border-top:2px solid var(--green);}
+  .card-hdr{display:flex;align-items:center;justify-content:space-between;}
+  .card-title{font-size:1rem;font-weight:700;}
+  .bloom .card-title{color:#FF6B6B;}
+  .cuckoo .card-title{color:#4ADE80;}
+  .wbadge{font-family:var(--mono);font-size:0.7rem;padding:0.22rem 0.6rem;border-radius:20px;}
+  .bloom .wbadge{background:rgba(192,57,43,0.2);color:var(--red-light);border:1px solid rgba(192,57,43,0.3);}
+  .cuckoo .wbadge{background:rgba(26,122,74,0.2);color:var(--green-light);border:1px solid rgba(26,122,74,0.3);}
+  .cap-lbl{display:flex;justify-content:space-between;font-size:0.7rem;font-family:var(--mono);color:var(--gray);margin-bottom:0.25rem;}
+  .cap-bar{height:9px;background:var(--border);border-radius:5px;overflow:hidden;}
+  .cap-fill{height:100%;border-radius:5px;transition:width 0.4s ease;}
+  .bloom .cap-fill{background:linear-gradient(90deg,var(--red),#FF6B6B);}
+  .cuckoo .cap-fill{background:linear-gradient(90deg,var(--green),var(--green-light));}
+  .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;}
+  .sbox{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.7rem;}
+  .slabel{font-size:0.62rem;font-family:var(--mono);color:var(--gray);text-transform:uppercase;}
+  .sval2{font-size:1.1rem;font-weight:700;font-family:var(--mono);margin-top:0.1rem;}
+  .bloom .sval2{color:#FF6B6B;}
+  .cuckoo .sval2{color:#4ADE80;}
+  .wflash{position:absolute;inset:0;border-radius:12px;background:rgba(192,57,43,0.2);opacity:0;pointer-events:none;z-index:5;}
+  .wflash.on{animation:flash 0.7s ease;}
+  @keyframes flash{0%{opacity:0;}30%{opacity:1;}100%{opacity:0;}}
+
+  /* TRACEABILITY */
+  .trace-wrap{grid-column:1/-1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.1rem 1.4rem;display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;}
+  .titem{display:flex;flex-direction:column;gap:0.45rem;}
+  .thdr{display:flex;justify-content:space-between;font-size:0.78rem;}
+  .tname{font-weight:600;}
+  .tpct{font-family:var(--mono);font-size:0.88rem;}
+  .tbar{height:14px;background:var(--border);border-radius:7px;overflow:hidden;}
+  .tfill{height:100%;border-radius:7px;transition:width 0.5s ease;}
+  .titem.bloom .tname,.titem.bloom .tpct{color:#FF6B6B;}
+  .titem.bloom .tfill{background:linear-gradient(90deg,var(--red),#FF6B6B);}
+  .titem.cuckoo .tname,.titem.cuckoo .tpct{color:#4ADE80;}
+  .titem.cuckoo .tfill{background:linear-gradient(90deg,var(--green),#4ADE80);}
+
+  /* PROGRESS */
+  .prog-wrap{grid-column:1/-1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:0.9rem 1.4rem;display:flex;align-items:center;gap:1rem;}
+  .prog-label{font-size:0.72rem;font-family:var(--mono);color:var(--gray);min-width:120px;}
+  .prog-outer{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden;}
+  .prog-inner{height:100%;background:linear-gradient(90deg,var(--teal),var(--teal-light));border-radius:4px;transition:width 0.3s;}
+  .prog-count{font-family:var(--mono);font-size:0.78rem;color:var(--teal-light);min-width:140px;text-align:right;}
+
+  /* LOG */
+  .log-panel{grid-column:1/-1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.4rem;}
+  .log-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.7rem;}
+  .log-title{font-size:0.8rem;font-weight:600;font-family:var(--mono);color:var(--gray);}
+  .log-entries{height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:0.18rem;}
+  .log-entries::-webkit-scrollbar{width:3px;}
+  .log-entries::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+  .lentry{font-family:var(--mono);font-size:0.7rem;padding:0.18rem 0.45rem;border-radius:4px;display:flex;gap:0.7rem;align-items:center;}
+  .lentry.info{color:#94A3B8;}
+  .lentry.attack{color:var(--amber);background:rgba(245,158,11,0.08);}
+  .lentry.wipe{color:var(--red-light);background:rgba(192,57,43,0.12);font-weight:600;}
+  .lentry.delete{color:var(--teal-light);background:rgba(2,128,144,0.08);}
+  .lentry.done{color:var(--green-light);background:rgba(26,122,74,0.12);font-weight:600;}
+  .lentry.error{color:var(--red-light);background:rgba(192,57,43,0.2);}
+  .ltime{color:var(--gray);min-width:55px;}
+
+  /* GRAPH SECTION */
+  .graph-section{
+    grid-column:1/-1;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:1.2rem 1.4rem;
+    display:none;
+  }
+  .graph-section.visible{ display:block; }
+  .graph-hdr{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:1rem;
+  }
+  .graph-title{
+    font-size:1rem;font-weight:700;color:var(--teal-light);
+  }
+  .graph-subtitle{
+    font-size:0.72rem;font-family:var(--mono);color:var(--gray);
+    margin-top:0.2rem;
+  }
+  .graph-img{
+    width:100%;border-radius:8px;
+    border:1px solid var(--border);
+    display:block;
+  }
+
+  /* FINAL SUMMARY */
+  .final-section{
+    grid-column:1/-1;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:1.2rem 1.4rem;
+    display:none;
+  }
+  .final-section.visible{ display:block; }
+  .final-title{
+    font-size:1rem;font-weight:700;margin-bottom:1rem;color:var(--white);
+  }
+  .final-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:0.8rem;
+  }
+  .final-card{
+    background:rgba(255,255,255,0.03);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:0.9rem 1rem;
+    display:flex;flex-direction:column;gap:0.3rem;
+  }
+  .final-label{font-size:0.65rem;font-family:var(--mono);color:var(--gray);text-transform:uppercase;letter-spacing:0.06em;}
+  .final-bloom{font-size:1rem;font-weight:700;font-family:var(--mono);color:#FF6B6B;}
+  .final-cuckoo{font-size:1rem;font-weight:700;font-family:var(--mono);color:#4ADE80;}
+  .final-vs{font-size:0.65rem;font-family:var(--mono);color:var(--gray);margin:0.15rem 0;}
+
+  .connected{background:rgba(2,128,144,0.15);border-color:rgba(2,128,144,0.3);color:var(--teal-light);}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">CF</div>
+    <div>
+      <h1>SDN Forensic Filter Dashboard — Live Python Backend</h1>
+      <p>Running actual bloom_filter.py + cuckoo_filter.py · CIC-IDS2017 · IIIT Hyderabad</p>
+    </div>
+  </div>
+  <div class="status-badge" id="conn-badge">
+    <div class="dot pulse" id="status-dot"></div>
+    <span id="status-text">Connecting to Flask...</span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- CONTROLS -->
+  <div class="ctrl">
+    <div class="slider-group">
+      <div class="ctrl-label">Filter Capacity</div>
+      <input type="range" id="sl-cap" min="500" max="10000" value="5000" step="500"
+        oninput="document.getElementById('v-cap').textContent=Number(this.value).toLocaleString()">
+      <div class="sval"><span id="v-cap">5,000</span> items</div>
+    </div>
+    <div class="slider-group">
+      <div class="ctrl-label">Total Packets</div>
+      <input type="range" id="sl-pkts" min="5000" max="50000" value="50000" step="5000"
+        oninput="document.getElementById('v-pkts').textContent=Number(this.value).toLocaleString()">
+      <div class="sval"><span id="v-pkts">50,000</span> packets</div>
+    </div>
+    <div class="divider"></div>
+    <button class="btn btn-primary" id="run-btn" onclick="startSim()">▶ Run Simulation</button>
+    <button class="btn btn-stop"    id="stop-btn" onclick="stopSim()" disabled>⏹ Stop</button>
+    <button class="btn btn-danger"  onclick="resetSim()">↺ Reset</button>
+  </div>
+
+  <!-- BLOOM CARD -->
+  <div class="fcard bloom" id="bloom-card">
+    <div class="wflash" id="bloom-flash"></div>
+    <div class="card-hdr">
+      <div class="card-title">🔴 Bloom Filter</div>
+      <div class="wbadge" id="b-wipe-badge">Wipes: 0</div>
+    </div>
+    <div>
+      <div class="cap-lbl">
+        <span>Capacity</span>
+        <span id="b-cap-txt">0 / 5000</span>
+      </div>
+      <div class="cap-bar"><div class="cap-fill" id="b-cap-fill" style="width:0%"></div></div>
+    </div>
+    <div class="stats-grid">
+      <div class="sbox"><div class="slabel">Inserted</div><div class="sval2 bloom" id="b-inserted">0</div></div>
+      <div class="sbox"><div class="slabel">Wipes</div><div class="sval2 bloom" id="b-wipes">0</div></div>
+      <div class="sbox"><div class="slabel">Traceability</div><div class="sval2 bloom" id="b-trace">0%</div></div>
+      <div class="sbox"><div class="slabel">Memory (MB)</div><div class="sval2 bloom" id="b-mem">0</div></div>
+      <div class="sbox"><div class="slabel">Curr. FPR</div><div class="sval2 bloom" id="b-fpr">0%</div></div>
+      <div class="sbox"><div class="slabel">Evidence?</div><div class="sval2 bloom" id="b-evid">—</div></div>
+    </div>
+  </div>
+
+  <!-- CUCKOO CARD -->
+  <div class="fcard cuckoo">
+    <div class="card-hdr">
+      <div class="card-title">🟢 Cuckoo Filter</div>
+      <div class="wbadge" id="c-wipe-badge">Wipes: 0 ✓</div>
+    </div>
+    <div>
+      <div class="cap-lbl">
+        <span>Capacity (Sliding Window at 90%)</span>
+        <span id="c-cap-txt">0 / 5000</span>
+      </div>
+      <div class="cap-bar"><div class="cap-fill" id="c-cap-fill" style="width:0%"></div></div>
+    </div>
+    <div class="stats-grid">
+      <div class="sbox"><div class="slabel">Inserted</div><div class="sval2 cuckoo" id="c-inserted">0</div></div>
+      <div class="sbox"><div class="slabel">Deletes</div><div class="sval2 cuckoo" id="c-deletes">0</div></div>
+      <div class="sbox"><div class="slabel">Traceability</div><div class="sval2 cuckoo" id="c-trace">0%</div></div>
+      <div class="sbox"><div class="slabel">Memory (MB)</div><div class="sval2 cuckoo" id="c-mem">0</div></div>
+      <div class="sbox"><div class="slabel">Theor. FPR</div><div class="sval2 cuckoo" id="c-fpr">0%</div></div>
+      <div class="sbox"><div class="slabel">Eviction</div><div class="sval2 cuckoo">Attack-Aware ✓</div></div>
+    </div>
+  </div>
+
+  <!-- TRACEABILITY BARS -->
+  <div class="trace-wrap">
+    <div class="titem bloom">
+      <div class="thdr">
+        <span class="tname">Bloom Filter — Evidence Available</span>
+        <span class="tpct" id="b-tpct">0%</span>
+      </div>
+      <div class="tbar"><div class="tfill" id="b-tbar" style="width:0%"></div></div>
+    </div>
+    <div class="titem cuckoo">
+      <div class="thdr">
+        <span class="tname">Cuckoo Filter — Evidence Available</span>
+        <span class="tpct" id="c-tpct">0%</span>
+      </div>
+      <div class="tbar"><div class="tfill" id="c-tbar" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="prog-wrap">
+    <div class="prog-label">Overall Progress</div>
+    <div class="prog-outer">
+      <div class="prog-inner" id="prog-fill" style="width:0%"></div>
+    </div>
+    <div class="prog-count" id="prog-count">0 / 0 packets</div>
+  </div>
+
+  <!-- LOG -->
+  <div class="log-panel">
+    <div class="log-hdr">
+      <div class="log-title">// LIVE EVENT LOG — Real Python Output</div>
+      <button class="btn btn-danger" style="padding:0.28rem 0.6rem;font-size:0.7rem"
+        onclick="document.getElementById('log-entries').innerHTML=''">Clear</button>
+    </div>
+    <div class="log-entries" id="log-entries">
+      <div class="lentry info">
+        <span class="ltime">--:--:--</span>
+        <span>Waiting for Flask server at localhost:5000...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- FINAL SUMMARY — appears after simulation -->
+  <div class="final-section" id="final-section">
+    <div class="final-title">📊 Final Results Summary</div>
+    <div class="final-grid">
+      <div class="final-card">
+        <div class="final-label">Total Wipes</div>
+        <div class="final-bloom" id="f-wipes">—</div>
+        <div class="final-vs">vs</div>
+        <div class="final-cuckoo">0 ✅</div>
+      </div>
+      <div class="final-card">
+        <div class="final-label">Final Traceability</div>
+        <div class="final-bloom" id="f-b-trace">—</div>
+        <div class="final-vs">vs</div>
+        <div class="final-cuckoo" id="f-c-trace">—</div>
+      </div>
+      <div class="final-card">
+        <div class="final-label">Memory Usage</div>
+        <div class="final-bloom" id="f-b-mem">—</div>
+        <div class="final-vs">vs</div>
+        <div class="final-cuckoo" id="f-c-mem">—</div>
+      </div>
+      <div class="final-card">
+        <div class="final-label">Selective Deletes</div>
+        <div class="final-bloom">0 ❌</div>
+        <div class="final-vs">vs</div>
+        <div class="final-cuckoo" id="f-deletes">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GRAPH — appears after simulation -->
+  <div class="graph-section" id="graph-section">
+    <div class="graph-hdr">
+      <div>
+        <div class="graph-title">📈 Generated results.png — Live from Python</div>
+        <div class="graph-subtitle">
+          Generated by matplotlib using your actual bloom_filter.py +
+          cuckoo_filter.py + CIC-IDS2017 dataset
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="window.open('/results.png')">
+        ↗ Open Full Size
+      </button>
+    </div>
+    <img class="graph-img" id="graph-img" src="" alt="Results Graph">
+  </div>
+
+</div><!-- end .main -->
+
+<script>
+let polling    = null;
+let lastEvents = 0;
+let prevWipes  = 0;
+
+// ── POLL ──────────────────────────────────
+async function pollState() {
+  try {
+    const res = await fetch('/state');
+    const s   = await res.json();
+    updateUI(s);
+  } catch(e) {
+    document.getElementById('status-text').textContent = 'Cannot reach Flask server';
+    document.getElementById('conn-badge').classList.remove('connected');
+  }
+}
+
+function updateUI(s) {
+  const cap = parseInt(document.getElementById('sl-cap').value);
+
+  // Badge
+  document.getElementById('conn-badge').classList.add('connected');
+  document.getElementById('status-text').textContent =
+    s.running ? `Processing ${(s.packets_processed||0).toLocaleString()} packets...` :
+    s.done    ? 'Complete ✓ — graph generated!' : 'Connected · Ready';
+
+  // Progress
+  const pct = s.total_packets > 0
+    ? (s.packets_processed / s.total_packets * 100) : 0;
+  document.getElementById('prog-fill').style.width  = pct + '%';
+  document.getElementById('prog-count').textContent =
+    `${(s.packets_processed||0).toLocaleString()} / ${(s.total_packets||0).toLocaleString()} packets`;
+
+  // Bloom
+  const bPct = Math.min(100, (s.bloom_count / cap) * 100);
+  document.getElementById('b-cap-fill').style.width  = bPct + '%';
+  document.getElementById('b-cap-txt').textContent   = `${s.bloom_count} / ${cap}`;
+  document.getElementById('b-inserted').textContent  = (s.packets_processed||0).toLocaleString();
+  document.getElementById('b-wipes').textContent     = s.bloom_wipes;
+  document.getElementById('b-wipe-badge').textContent= `Wipes: ${s.bloom_wipes}`;
+  document.getElementById('b-trace').textContent     = s.bloom_traceability + '%';
+  document.getElementById('b-mem').textContent       = s.bloom_memory;
+  document.getElementById('b-fpr').textContent       = s.bloom_fpr + '%';
+  document.getElementById('b-evid').textContent      = s.bloom_wipes > 0 ? 'LOST ❌' : 'OK ✓';
+  document.getElementById('b-tpct').textContent      = s.bloom_traceability + '%';
+  document.getElementById('b-tbar').style.width      = s.bloom_traceability + '%';
+
+  // Wipe flash
+  if (s.bloom_wipes > prevWipes) {
+    const f = document.getElementById('bloom-flash');
+    f.classList.remove('on');
+    void f.offsetWidth;
+    f.classList.add('on');
+    prevWipes = s.bloom_wipes;
+  }
+
+  // Cuckoo
+  const cPct = Math.min(100, (s.cuckoo_count / cap) * 100);
+  document.getElementById('c-cap-fill').style.width  = cPct + '%';
+  document.getElementById('c-cap-txt').textContent   = `${s.cuckoo_count} / ${cap}`;
+  document.getElementById('c-inserted').textContent  = (s.packets_processed||0).toLocaleString();
+  document.getElementById('c-deletes').textContent   = (s.cuckoo_deletes||0).toLocaleString();
+  document.getElementById('c-trace').textContent     = s.cuckoo_traceability + '%';
+  document.getElementById('c-mem').textContent       = s.cuckoo_memory;
+  document.getElementById('c-fpr').textContent       = s.cuckoo_fpr + '%';
+  document.getElementById('c-tpct').textContent      = s.cuckoo_traceability + '%';
+  document.getElementById('c-tbar').style.width      = s.cuckoo_traceability + '%';
+
+  // Events
+  if (s.events && s.events.length > lastEvents) {
+    s.events.slice(lastEvents).forEach(ev =>
+      addLog(ev.type, ev.time, ev.msg)
+    );
+    lastEvents = s.events.length;
+  }
+
+  // Buttons
+  document.getElementById('run-btn').disabled  = s.running;
+  document.getElementById('stop-btn').disabled = !s.running;
+
+  // Graph + final summary — show when done
+  if (s.done && s.graph_ready) {
+    showGraph();
+    showFinal(s.final || {});
+    if (polling) { clearInterval(polling); polling = null; }
+  }
+}
+
+function showGraph() {
+  const section = document.getElementById('graph-section');
+  const img     = document.getElementById('graph-img');
+  // Add timestamp to bust cache
+  img.src = '/results.png?t=' + Date.now();
+  section.classList.add('visible');
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function showFinal(f) {
+  const section = document.getElementById('final-section');
+  section.classList.add('visible');
+  document.getElementById('f-wipes').textContent   = (f.bloom_wipes   || '—') + (f.bloom_wipes > 0 ? ' ❌' : '');
+  document.getElementById('f-b-trace').textContent = (f.bloom_trace   || '—') + '%';
+  document.getElementById('f-c-trace').textContent = (f.cuckoo_trace  || '—') + '% ✅';
+  document.getElementById('f-b-mem').textContent   = (f.bloom_memory  || '—') + ' MB';
+  document.getElementById('f-c-mem').textContent   = (f.cuckoo_memory || '—') + ' MB';
+  document.getElementById('f-deletes').textContent = (f.cuckoo_deletes|| '—').toLocaleString?.() || f.cuckoo_deletes;
+}
+
+function addLog(type, time, msg) {
+  const entries = document.getElementById('log-entries');
+  const div = document.createElement('div');
+  div.className = `lentry ${type}`;
+  div.innerHTML = `<span class="ltime">${time}</span><span>${msg}</span>`;
+  entries.appendChild(div);
+  entries.scrollTop = entries.scrollHeight;
+  while (entries.children.length > 150) entries.removeChild(entries.firstChild);
+}
+
+// ── CONTROLS ──────────────────────────────
+async function startSim() {
+  lastEvents = 0;
+  prevWipes  = 0;
+  // Hide graph and final
+  document.getElementById('graph-section').classList.remove('visible');
+  document.getElementById('final-section').classList.remove('visible');
+
+  const cap  = parseInt(document.getElementById('sl-cap').value);
+  const pkts = parseInt(document.getElementById('sl-pkts').value);
+
+  await fetch('/start', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ capacity: cap, num_packets: pkts })
+  });
+
+  if (polling) clearInterval(polling);
+  polling = setInterval(pollState, 800);
+}
+
+async function stopSim() {
+  await fetch('/stop', { method: 'POST' });
+}
+
+async function resetSim() {
+  if (polling) { clearInterval(polling); polling = null; }
+  await fetch('/reset', { method: 'POST' });
+  lastEvents = 0;
+  prevWipes  = 0;
+  document.getElementById('log-entries').innerHTML = '';
+  document.getElementById('graph-section').classList.remove('visible');
+  document.getElementById('final-section').classList.remove('visible');
+  addLog('info', '--:--:--', 'Reset complete. Configure and click Run Simulation.');
+  pollState();
+}
+
+// ── INIT ──────────────────────────────────
+pollState();
+setInterval(() => { if (!polling) pollState(); }, 5000);
+</script>
+</body>
+</html>

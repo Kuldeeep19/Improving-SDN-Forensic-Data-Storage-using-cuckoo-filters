@@ -1,0 +1,249 @@
+What is this project about? 
+In one sentence 
+You are replacing an old, ﬂawed data structure (Bloom Filter) used to store network forensic logs 
+with a smarter one (Cuckoo Filter) that can delete old records — and then proving using a real 
+dataset that your version wastes less memory and never loses evidence. 
+Domain tags 
+SoŌware Deﬁned Networking (SDN)  Network Forensics InformaƟon Security  Data Structures (DSA) 
+The two reference papers — what they do 
+Paper 1 — Varun Sharma (IIIT Hyderabad) 
+Title: OpƟmizing Forensic Data Availability and Reten Ɵon of SDN Forensic Logs by Using Bloom Filter  
+ 
+What it did:  Sharma used Bloom Filters to compress and store SDN network logs. He ran Mininet (a 
+network simulator) with 1 controller + 6 switches + 4 hosts, captured pcap ﬁles using tcpdump, then 
+inserted packet data (source IP, des ƟnaƟon IP, packet size) into Blo om Filters. He showed that 1024 
+GB of raw logs could be compressed to just ~52 MB using a Bloom Filter. 
+ 
+The gap he le Ō open: At the very end of his paper (Future Work sec Ɵon), he literally says:  "we can 
+plan to experiment on op Ɵmizing the bloom ﬁlter applica Ɵon by using… cuckoo ﬁlter."  — YOUR 
+PROJECT IS EXACTLY THIS FUTURE WORK 
+Paper 2 — Shesha Shila Bharadwaj (IIIT Hyderabad) 
+Title: Network Management Framework for Network Forensic Analysis 
+ 
+What it did:  This paper introduced the concept of tracing malicious packets back to their source 
+using Bloom Filters stored at routers. It proposed two methods — Distributed Management (each 
+router queries its own Bloom ﬁlter) and Centralized Management (all ﬁlters sent to a central NMS). 
+The key idea: a vic Ɵm extracts an "excerpt" (fragment) from a malicious packet and queries each 
+device to ﬁnd where it passed through. 
+ 
+Why it ma Ʃers to your project:  This is where the concept of traceability  comes from. Your 
+professor's ques Ɵon "how do you trace back to source?" — the answer is in this paper. 
+Answering the professor's ques Ɵon: "How do you trace back to source?"  
+How do you trace back to source without Mininet/a real network? 
+Answer to give:  
+"Traceability in our project is deﬁned as evidence availability  — the ability to successfully retrieve a 
+forensic ar Ɵfact aŌer a set period of Ɵme. 
+ 
+In Shesha Shila's paper, traceability meant following a packet's path through physical routers. In our 
+oﬄine analysis version, it means: if an a Ʃack packet was inserted into our ﬁlter 7 days ago, can we 
+sƟll ﬁnd it today?  
+ 
+— With a Bloom Filter  (Varun Sharma's approach): when the ﬁlter ﬁlls up, it must be reset en Ɵrely. 
+---PAGE---
+The aƩack packet is lost. Traceability = 0% a Ōer a wipe.  
+ 
+— With our Cuckoo Filter : when capacity is reached, we delete only the oldest 10% of entries using 
+the delete() func Ɵon. The aƩack packet from 7 days ago survives. Traceability = preserved.  
+ 
+We simulate this using the CIC-IDS2017 dataset — we feed packets in, hit capacity, and compare 
+query success rates between both ﬁlters." 
+The core problem: why Bloom Filters fail 
+Issue Bloom Filter (Exis Ɵng) Cuckoo Filter (Your Solu Ɵon) 
+DeleƟon Cannot delete individual items Supports delete() per item 
+When full Must wipe en Ɵre ﬁlter — all evidence 
+lost Delete oldest entries only — evidence 
+preserved 
+GDPR/Privacy Cannot selec Ɵvely remove expired data  Can expire data on a schedule 
+Memory Fixed, wastes space for empty slots  More eﬃcient per entry  
+False 
+negaƟves None None (with Vic Ɵm Stash buﬀer)  
+Your 4 objec Ɵves — what you need to build 
+1 
+Write Python code for a standard Bloom Filter AND a Cuckoo Filter side-by-side for comparison 
+2 
+Download and process the CIC-IDS2017 dataset — feed packet records (src IP, dst IP, size) into both 
+ﬁlters to simulate high-volume traﬃc 
+3 
+Program the Cuckoo Filter to auto-delete the oldest 10% of entries when capacity is reached 
+(the "Sliding Window" — this is the feature Bloom Filters cannot do) 
+4 
+Measure and graph two things: Memory Usage (RAM in MB)  and Data Availability / Traceability (% 
+of queries that succeed)  
+Grading breakdown (as told by professor) 
+Component  Marks 
+Bloom Filter Python implementa Ɵon 20% 
+---PAGE---
+CIC-IDS2017 dataset processing 20% 
+Cuckoo Filter with sliding window dele Ɵon 20% 
+Measurement graphs (memory + data availability) 20% 
+End-of-project report + presenta Ɵon + viva 20% 
+ 
+Tech stack (no hardware needed) 
+Tool Purpose 
+Python 3.8+  All coding — both ﬁlters, analysis scripts  
+mmh3 library MurmurHash — needed for Cuckoo Filter hashing 
+Pandas Load and parse the CIC-IDS2017 CSV dataset 
+Matplotlib Plot memory usage and traceability graphs 
+CIC-IDS2017 dataset  Free download — University of New Brunswick  
+Now let me also show you the big picture of how the three things (your project + both papers) 
+connect to each other: 
+V 
+visualize 
+V 
+visualize show_widget 
+ 
+ 
+---PAGE---
+ 
+ 
+Here's a quick summary of the most important things to remember:  
+Your project in plain language:  Varun Sharma proved Bloom Filters save storage for SDN logs. But he
+admiƩed at the end of his own paper that Bloom Filters have a fatal ﬂaw — they can't delete data.
+Your project is literally his suggested next step: replace it with a Cuckoo Filter that can delete, prove
+it's beƩer.
+The "traceback to source" ques Ɵon comes from Shesha Shila's paper. In her paper, traceback meant
+following a packet through physical routers. In your project (since you're doing it oﬄine), traceback
+means: "can I sƟll ﬁnd evidence of an old a Ʃack packet a Ōer the ﬁlter ﬁlls up?"  With Bloom Filters —
+no, it gets wiped. With your Cuckoo Filter — yes, because you only delete the oldest entries.
+What you actually build:
+1. Python code for both ﬁlters
+2. Feed the CIC-IDS2017 dataset into both
+3. Hit capacity — show Bloom Filter wipes everything, Cuckoo Filter keeps recent evidence
+4. Plot memory usage and evidence survival rate graphs
+
+
+
+---PAGE---
+
+================================================================
+  UPDATE — WHAT WAS ACTUALLY BUILT (post-meeting extensions)
+================================================================
+
+The original scope above was the starting point. After the project
+meeting, we extended the work so that "traceback to source" is no
+longer a redefinition — we actually built a real SDN network and do
+real path reconstruction. The two updates below are the additions.
+
+----------------------------------------------------------------
+UPDATE 1 — WE BUILT A REAL SDN SOFT-ROUTER NETWORK
+----------------------------------------------------------------
+
+Instead of one filter pair sitting offline, we now simulate the full
+topology from Varun Sharma's Mininet setup:
+
+    1 controller + 6 soft-switches + 4 hosts
+
+Every soft-switch carries its OWN Bloom Filter and its OWN Cuckoo
+Filter (just like every real router does in the Sharma paper).
+Packets flow through the network along BFS shortest paths, and every
+switch on the path records the packet into both of its filters. Attack
+packets travel from host H0 to host H3, so the true attack path is
+    H0 -> S0 -> S1 -> S2 -> S3 -> H3
+
+This means traceback is no longer "can I still find the packet in the
+filter?" — it is now "starting from the victim, can I reconstruct the
+exact switches the attacker's packet travelled through?" — exactly as
+Shesha Shila's paper defines it.
+
+----------------------------------------------------------------
+UPDATE 2 — THREE TRACEBACK STRATEGIES IMPLEMENTED
+----------------------------------------------------------------
+
+We implemented and compared three ways of answering the "who attacked
+me?" question:
+
+  (A) Bloom + SPIE query-all
+      The controller asks every switch in parallel:
+      "did you see this packet?". The YES-switches form the path.
+      Cost: O(N) queries. Result: 0/100 — the Bloom wipes destroyed
+      the evidence at 14 switches, so every switch replies NO.
+
+  (B) Cuckoo + SPIE query-all
+      Same strategy, but with Cuckoo Filters.
+      Cost: O(N) queries. Result: 100/100 — every attack path is
+      fully recovered.
+
+  (C) Cuckoo + Parent-Pointer walk-back  [the new idea]
+      Each switch stores an extra field per packet: the ID of the
+      upstream switch that handed it the packet. The controller
+      starts at the victim's switch, asks "who sent you this?",
+      follows the pointer, asks again, and so on — hop by hop back
+      to the source.
+      Cost: O(path length) queries (NOT O(N)). Result: 97/100
+      successful, 79/100 reconstruct the EXACT ORDERED path.
+      Only method that recovers the direction of travel.
+
+----------------------------------------------------------------
+UPDATE 3 — SDN CONTROLLER ORCHESTRATION
+----------------------------------------------------------------
+
+We added an SDNController class that mirrors the OpenFlow control
+plane. When the victim's IDS detects an attack, the excerpt goes to
+the controller, and the controller runs all three traceback methods
+on the victim's behalf and reports how many switch queries each one
+needed. This gives us the query-efficiency comparison.
+
+----------------------------------------------------------------
+UPDATE 4 — NETWORK-LEVEL FPR / FNR MEASUREMENT
+----------------------------------------------------------------
+
+We now measure not just per-filter FPR but also NETWORK-level
+accuracy — how often a switch wrongly answers YES for a packet that
+never passed through it (FP), and how often a switch wrongly answers
+NO for a packet that did (FN). Results on 100 tracked attacks:
+
+                     Bloom      Cuckoo
+    FP (wrong YES)   0.00%      0.00%
+    FN (wrong NO)    100.00%    6.50%
+
+The Bloom FN is catastrophic because the wipes erased everything.
+
+----------------------------------------------------------------
+UPDATE 5 — SCALABILITY SWEEP
+----------------------------------------------------------------
+
+To show the approach is not tied to the 6-switch topology, we rerun
+the experiment with N = 6, 10, 20, 50 switches:
+
+    N = 6   -> SPIE  6 queries,  PP 4 queries,  both ~100%
+    N = 10  -> SPIE 10 queries,  PP 4 queries,  both ~99-100%
+    N = 20  -> SPIE 20 queries,  PP 3 queries,  both ~99-100%
+    N = 50  -> SPIE 50 queries,  PP 3 queries,  both ~99-100%
+
+At N=50, parent-pointer uses ~17x fewer controller queries than SPIE
+while maintaining the same accuracy. This is the scalability story.
+
+----------------------------------------------------------------
+FINAL NUMBERS — offline vs network (both runs)
+----------------------------------------------------------------
+
+                              Offline      Network (6 switches)
+  Bloom wipes                 4            14
+  Cuckoo selective deletes    41,000       98,400
+  Bloom final traceability    2%           0% (SPIE)
+  Cuckoo final traceability   95%          100% (SPIE) / 97% (PP)
+  PP ordered reconstruction   N/A          79/100
+  Query reduction (PP vs SPIE)              ~42% at N=6, ~94% at N=50
+
+----------------------------------------------------------------
+NEW FILES TO KNOW ABOUT
+----------------------------------------------------------------
+
+  network_simulator.py  — SoftSwitch, SDNNetwork, SDNController
+  network_analysis.py   — full network + scalability experiment
+  results_network.png   — 3-way traceback comparison plot
+  results_scalability.png — scalability sweep plot
+  report.tex            — rewritten to cover all of the above
+
+----------------------------------------------------------------
+ONE-SENTENCE UPDATED SUMMARY
+----------------------------------------------------------------
+
+  "Per-switch Cuckoo Filters plus attack-aware retention plus a
+   parent-pointer field give a working SDN forensic traceback system
+   with zero evidence wipes, 97% path recovery, ordered attack paths,
+   ~42-94% fewer controller queries than SPIE, and clean scaling to
+   50 switches — at essentially the same memory cost as the original
+   Bloom Filter baseline."
+
+---PAGE---

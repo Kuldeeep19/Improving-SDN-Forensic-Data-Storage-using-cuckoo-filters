@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SDN Forensic Filter Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --navy: #0D1B2A;
+    --teal: #028090;
+    --teal-light: #02A8BC;
+    --green: #1A7A4A;
+    --green-light: #22C55E;
+    --red: #C0392B;
+    --red-light: #EF4444;
+    --white: #F8FAFC;
+    --gray: #64748B;
+    --card: #111827;
+    --border: #1E2D3D;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--navy);
+    color: var(--white);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(2,128,144,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(2,128,144,0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* HEADER */
+  .header {
+    position: relative;
+    z-index: 10;
+    padding: 1.2rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(13,27,42,0.95);
+    backdrop-filter: blur(10px);
+  }
+
+  .header-left { display: flex; align-items: center; gap: 1rem; }
+
+  .logo {
+    width: 38px; height: 38px;
+    background: var(--teal);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800;
+    color: white; font-family: var(--mono);
+  }
+
+  .header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
+  .header p { font-size: 0.72rem; color: var(--gray); font-family: var(--mono); }
+
+  .status-badge {
+    display: flex; align-items: center; gap: 0.5rem;
+    background: rgba(26,122,74,0.15);
+    border: 1px solid rgba(26,122,74,0.3);
+    padding: 0.4rem 0.9rem; border-radius: 20px;
+    font-size: 0.72rem; font-family: var(--mono); color: var(--green-light);
+  }
+
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green-light);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  /* MAIN LAYOUT */
+  .main {
+    position: relative; z-index: 1;
+    padding: 1.5rem 2rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto auto;
+    gap: 1rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* CONTROL PANEL — full width */
+  .control-panel {
+    grid-column: 1 / -1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.2rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .control-label {
+    font-size: 0.7rem; font-family: var(--mono);
+    color: var(--gray); text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 0.3rem;
+  }
+
+  .slider-group { display: flex; flex-direction: column; min-width: 160px; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%; height: 4px;
+    background: var(--border); border-radius: 2px; outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--teal); cursor: pointer;
+    box-shadow: 0 0 8px rgba(2,128,144,0.5);
+  }
+
+  .slider-val {
+    font-family: var(--mono); font-size: 0.8rem;
+    color: var(--teal-light); margin-top: 0.2rem;
+  }
+
+  .btn {
+    padding: 0.6rem 1.4rem; border-radius: 8px; border: none;
+    font-family: var(--sans); font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+
+  .btn-primary {
+    background: var(--teal); color: white;
+  }
+  .btn-primary:hover { background: var(--teal-light); transform: translateY(-1px); }
+  .btn-primary:disabled { background: var(--border); color: var(--gray); cursor: not-allowed; transform: none; }
+
+  .btn-danger { background: rgba(192,57,43,0.2); color: var(--red-light); border: 1px solid rgba(192,57,43,0.3); }
+  .btn-danger:hover { background: rgba(192,57,43,0.35); }
+
+  .speed-btns { display: flex; gap: 0.4rem; }
+  .speed-btn {
+    padding: 0.35rem 0.7rem; border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--gray); font-family: var(--mono);
+    font-size: 0.75rem; cursor: pointer; transition: all 0.15s;
+  }
+  .speed-btn.active { background: var(--teal); border-color: var(--teal); color: white; }
+
+  .divider { width: 1px; height: 40px; background: var(--border); }
+
+  /* FILTER CARDS */
+  .filter-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.2rem 1.5rem;
+    display: flex; flex-direction: column; gap: 0.9rem;
+  }
+
+  .filter-card.bloom { border-top: 2px solid var(--red); }
+  .filter-card.cuckoo { border-top: 2px solid var(--green); }
+
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .card-title {
+    font-size: 1rem; font-weight: 700; letter-spacing: -0.01em;
+  }
+  .bloom .card-title { color: #FF6B6B; }
+  .cuckoo .card-title { color: #4ADE80; }
+
+  .wipe-badge {
+    font-family: var(--mono); font-size: 0.72rem;
+    padding: 0.25rem 0.6rem; border-radius: 20px;
+  }
+  .bloom .wipe-badge {
+    background: rgba(192,57,43,0.2); color: var(--red-light);
+    border: 1px solid rgba(192,57,43,0.3);
+  }
+  .cuckoo .wipe-badge {
+    background: rgba(26,122,74,0.2); color: var(--green-light);
+    border: 1px solid rgba(26,122,74,0.3);
+  }
+
+  /* CAPACITY BAR */
+  .cap-label {
+    display: flex; justify-content: space-between;
+    font-size: 0.72rem; font-family: var(--mono); color: var(--gray);
+    margin-bottom: 0.3rem;
+  }
+
+  .cap-bar {
+    height: 10px; background: var(--border); border-radius: 5px; overflow: hidden;
+  }
+
+  .cap-fill {
+    height: 100%; border-radius: 5px; transition: width 0.3s ease;
+  }
+  .bloom .cap-fill { background: linear-gradient(90deg, var(--red), #FF6B6B); }
+  .cuckoo .cap-fill { background: linear-gradient(90deg, var(--green), var(--green-light)); }
+
+  /* BUCKET GRID */
+  .bucket-label {
+    font-size: 0.7rem; font-family: var(--mono); color: var(--gray);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  .bucket-grid {
+    display: grid;
+    grid-template-columns: repeat(20, 1fr);
+    gap: 2px;
+    height: 48px;
+  }
+
+  .bucket-cell {
+    border-radius: 2px;
+    background: var(--border);
+    transition: background 0.2s, transform 0.15s;
+  }
+
+  .bucket-cell.active { transform: scaleY(1.1); }
+  .bloom .bucket-cell.filled { background: rgba(192,57,43,0.7); }
+  .bloom .bucket-cell.new { background: #FF6B6B; box-shadow: 0 0 6px rgba(255,107,107,0.8); }
+  .bloom .bucket-cell.wiped { background: rgba(192,57,43,0.15); }
+  .cuckoo .bucket-cell.filled { background: rgba(26,122,74,0.7); }
+  .cuckoo .bucket-cell.new { background: #4ADE80; box-shadow: 0 0 6px rgba(74,222,128,0.8); }
+  .cuckoo .bucket-cell.attack { background: #F59E0B; box-shadow: 0 0 6px rgba(245,158,11,0.6); }
+
+  /* STATS GRID */
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem;
+  }
+
+  .stat-box {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.6rem 0.8rem;
+  }
+
+  .stat-label { font-size: 0.65rem; font-family: var(--mono); color: var(--gray); text-transform: uppercase; }
+  .stat-val { font-size: 1.2rem; font-weight: 700; font-family: var(--mono); margin-top: 0.1rem; }
+  .bloom .stat-val { color: #FF6B6B; }
+  .cuckoo .stat-val { color: #4ADE80; }
+
+  /* WIPE FLASH */
+  .wipe-flash {
+    position: absolute; inset: 0; border-radius: 12px;
+    background: rgba(192,57,43,0.15);
+    opacity: 0; pointer-events: none;
+    animation: none;
+    z-index: 5;
+  }
+
+  .wipe-flash.active { animation: flash 0.6s ease; }
+
+  @keyframes flash {
+    0% { opacity: 0; }
+    30% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* LOG PANEL — full width */
+  .log-panel {
+    grid-column: 1 / -1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+  }
+
+  .log-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 0.8rem;
+  }
+
+  .log-title { font-size: 0.85rem; font-weight: 600; font-family: var(--mono); color: var(--gray); }
+
+  .log-entries {
+    height: 120px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 0.2rem;
+  }
+
+  .log-entries::-webkit-scrollbar { width: 4px; }
+  .log-entries::-webkit-scrollbar-track { background: transparent; }
+  .log-entries::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-entry {
+    font-family: var(--mono); font-size: 0.72rem;
+    padding: 0.2rem 0.5rem; border-radius: 4px;
+    display: flex; gap: 0.8rem; align-items: center;
+    animation: slideIn 0.2s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .log-entry.insert { color: #94A3B8; }
+  .log-entry.attack { color: #F59E0B; background: rgba(245,158,11,0.08); }
+  .log-entry.wipe { color: var(--red-light); background: rgba(192,57,43,0.12); font-weight: 600; }
+  .log-entry.delete { color: var(--teal-light); background: rgba(2,128,144,0.08); }
+  .log-entry.done { color: var(--green-light); background: rgba(26,122,74,0.12); font-weight: 600; }
+
+  .log-time { color: var(--gray); min-width: 55px; }
+
+  /* TRACEABILITY BAR */
+  .trace-section { grid-column: 1 / -1; }
+
+  .trace-bars {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.2rem 1.5rem;
+  }
+
+  .trace-item { display: flex; flex-direction: column; gap: 0.5rem; }
+  .trace-header { display: flex; justify-content: space-between; font-size: 0.8rem; }
+  .trace-name { font-weight: 600; }
+  .trace-pct { font-family: var(--mono); font-size: 0.9rem; }
+
+  .trace-bar {
+    height: 14px; background: var(--border); border-radius: 7px; overflow: hidden;
+  }
+
+  .trace-fill {
+    height: 100%; border-radius: 7px;
+    transition: width 0.5s ease;
+  }
+
+  .trace-item.bloom .trace-name { color: #FF6B6B; }
+  .trace-item.bloom .trace-pct { color: #FF6B6B; }
+  .trace-item.bloom .trace-fill { background: linear-gradient(90deg, var(--red), #FF6B6B); }
+
+  .trace-item.cuckoo .trace-name { color: #4ADE80; }
+  .trace-item.cuckoo .trace-pct { color: #4ADE80; }
+  .trace-item.cuckoo .trace-fill { background: linear-gradient(90deg, var(--green), #4ADE80); }
+
+  /* OVERALL PROGRESS */
+  .progress-bar-wrap {
+    grid-column: 1 / -1;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1rem 1.5rem;
+    display: flex; align-items: center; gap: 1.2rem;
+  }
+
+  .progress-label { font-size: 0.75rem; font-family: var(--mono); color: var(--gray); min-width: 130px; }
+  .progress-outer { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .progress-inner { height: 100%; background: linear-gradient(90deg, var(--teal), var(--teal-light)); border-radius: 4px; transition: width 0.3s; }
+  .progress-count { font-family: var(--mono); font-size: 0.8rem; color: var(--teal-light); min-width: 90px; text-align: right; }
+
+  .filter-card { position: relative; }
+
+  /* LEGEND */
+  .legend {
+    display: flex; gap: 1rem; align-items: center;
+    font-size: 0.7rem; font-family: var(--mono); color: var(--gray);
+  }
+  .legend-item { display: flex; align-items: center; gap: 0.3rem; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    .main { grid-template-columns: 1fr; }
+    .filter-card { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">CF</div>
+    <div>
+      <h1>SDN Forensic Filter Dashboard</h1>
+      <p>Bloom Filter vs Cuckoo Filter · CIC-IDS2017 · IIIT Hyderabad</p>
+    </div>
+  </div>
+  <div class="status-badge">
+    <div class="status-dot"></div>
+    <span id="status-text">Ready to run</span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- CONTROL PANEL -->
+  <div class="control-panel">
+    <div class="slider-group">
+      <div class="control-label">Total Packets</div>
+      <input type="range" id="total-packets" min="100" max="2000" value="500" step="100" oninput="document.getElementById('packets-val').textContent=this.value">
+      <div class="slider-val"><span id="packets-val">500</span> packets</div>
+    </div>
+
+    <div class="slider-group">
+      <div class="control-label">Filter Capacity</div>
+      <input type="range" id="capacity" min="50" max="300" value="100" step="10" oninput="document.getElementById('cap-val').textContent=this.value">
+      <div class="slider-val"><span id="cap-val">100</span> items</div>
+    </div>
+
+    <div class="slider-group">
+      <div class="control-label">Attack % in Traffic</div>
+      <input type="range" id="attack-pct" min="5" max="40" value="15" step="5" oninput="document.getElementById('atk-val').textContent=this.value+'%'">
+      <div class="slider-val"><span id="atk-val">15%</span></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div>
+      <div class="control-label">Animation Speed</div>
+      <div class="speed-btns">
+        <button class="speed-btn" onclick="setSpeed(200, this)">Slow</button>
+        <button class="speed-btn active" onclick="setSpeed(60, this)">Normal</button>
+        <button class="speed-btn" onclick="setSpeed(20, this)">Fast</button>
+        <button class="speed-btn" onclick="setSpeed(5, this)">Turbo</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <button class="btn btn-primary" id="run-btn" onclick="runSimulation()">▶ Run Simulation</button>
+    <button class="btn btn-danger" onclick="resetAll()">↺ Reset</button>
+  </div>
+
+  <!-- BLOOM FILTER CARD -->
+  <div class="filter-card bloom" id="bloom-card">
+    <div class="wipe-flash" id="bloom-flash"></div>
+    <div class="card-header">
+      <div class="card-title">🔴 Bloom Filter</div>
+      <div class="wipe-badge" id="bloom-wipe-badge">Wipes: 0</div>
+    </div>
+
+    <div>
+      <div class="cap-label">
+        <span>Capacity</span>
+        <span id="bloom-cap-text">0 / 100</span>
+      </div>
+      <div class="cap-bar">
+        <div class="cap-fill" id="bloom-cap-fill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="bucket-label">Filter State (bucket visualization)</div>
+      <div class="bucket-grid" id="bloom-buckets"></div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-label">Inserted</div>
+        <div class="stat-val bloom" id="bloom-inserted">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Wipes</div>
+        <div class="stat-val bloom" id="bloom-wipes">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Traceability</div>
+        <div class="stat-val bloom" id="bloom-trace">0%</div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#C0392B"></div>Occupied</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgba(192,57,43,0.15)"></div>After wipe (empty)</div>
+    </div>
+  </div>
+
+  <!-- CUCKOO FILTER CARD -->
+  <div class="filter-card cuckoo" id="cuckoo-card">
+    <div class="card-header">
+      <div class="card-title">🟢 Cuckoo Filter</div>
+      <div class="wipe-badge" id="cuckoo-wipe-badge">Wipes: 0 ✓</div>
+    </div>
+
+    <div>
+      <div class="cap-label">
+        <span>Capacity (Sliding Window at 90%)</span>
+        <span id="cuckoo-cap-text">0 / 100</span>
+      </div>
+      <div class="cap-bar">
+        <div class="cap-fill" id="cuckoo-cap-fill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="bucket-label">Filter State (🟡 = attack evidence preserved)</div>
+      <div class="bucket-grid" id="cuckoo-buckets"></div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-label">Inserted</div>
+        <div class="stat-val cuckoo" id="cuckoo-inserted">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Deletes</div>
+        <div class="stat-val cuckoo" id="cuckoo-deletes">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Traceability</div>
+        <div class="stat-val cuckoo" id="cuckoo-trace">0%</div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:rgba(26,122,74,0.7)"></div>Benign</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#F59E0B"></div>Attack (protected)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#1E2D3D"></div>Empty</div>
+    </div>
+  </div>
+
+  <!-- TRACEABILITY BARS -->
+  <div class="trace-bars">
+    <div class="trace-item bloom">
+      <div class="trace-header">
+        <span class="trace-name">Bloom Filter — Evidence Available</span>
+        <span class="trace-pct" id="bloom-trace-pct">0%</span>
+      </div>
+      <div class="trace-bar">
+        <div class="trace-fill" id="bloom-trace-bar" style="width:0%"></div>
+      </div>
+    </div>
+    <div class="trace-item cuckoo">
+      <div class="trace-header">
+        <span class="trace-name">Cuckoo Filter — Evidence Available</span>
+        <span class="trace-pct" id="cuckoo-trace-pct">0%</span>
+      </div>
+      <div class="trace-bar">
+        <div class="trace-fill" id="cuckoo-trace-bar" style="width:0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROGRESS BAR -->
+  <div class="progress-bar-wrap">
+    <div class="progress-label">Overall Progress</div>
+    <div class="progress-outer">
+      <div class="progress-inner" id="overall-progress" style="width:0%"></div>
+    </div>
+    <div class="progress-count" id="progress-count">0 / 0 packets</div>
+  </div>
+
+  <!-- LOG PANEL -->
+  <div class="log-panel">
+    <div class="log-header">
+      <div class="log-title">// EVENT LOG</div>
+      <button class="btn btn-danger" style="padding:0.3rem 0.7rem;font-size:0.72rem" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="log-entries" id="log-entries">
+      <div class="log-entry insert">
+        <span class="log-time">00:00:00</span>
+        <span>System ready. Configure parameters and click Run Simulation.</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────
+let animSpeed = 60;
+let running = false;
+let simInterval = null;
+
+const BLOOM_BUCKETS = 40;
+const CUCKOO_BUCKETS = 40;
+
+let bloomState = {
+  cells: new Array(BLOOM_BUCKETS).fill(0), // 0=empty 1=filled
+  count: 0,
+  wipes: 0,
+  totalInserted: 0
+};
+
+let cuckooState = {
+  cells: new Array(CUCKOO_BUCKETS).fill(0), // 0=empty 1=benign 2=attack
+  count: 0,
+  deletes: 0,
+  totalInserted: 0
+};
+
+let attackPackets = [];
+let trackedAttacks = [];
+let capacity = 100;
+let totalPackets = 500;
+let attackPct = 15;
+let packets = [];
+let packetIdx = 0;
+let startTime = null;
+
+// ─────────────────────────────────────────
+// INIT BUCKETS
+// ─────────────────────────────────────────
+function initBuckets() {
+  const bloomGrid = document.getElementById('bloom-buckets');
+  const cuckooGrid = document.getElementById('cuckoo-buckets');
+  bloomGrid.innerHTML = '';
+  cuckooGrid.innerHTML = '';
+
+  for (let i = 0; i < BLOOM_BUCKETS; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'bucket-cell';
+    cell.id = `bloom-cell-${i}`;
+    bloomGrid.appendChild(cell);
+  }
+
+  for (let i = 0; i < CUCKOO_BUCKETS; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'bucket-cell';
+    cell.id = `cuckoo-cell-${i}`;
+    cuckooGrid.appendChild(cell);
+  }
+}
+
+// ─────────────────────────────────────────
+// GENERATE PACKETS
+// ─────────────────────────────────────────
+function generatePackets() {
+  totalPackets = parseInt(document.getElementById('total-packets').value);
+  attackPct = parseInt(document.getElementById('attack-pct').value);
+  capacity = parseInt(document.getElementById('capacity').value);
+
+  packets = [];
+  attackPackets = [];
+
+  for (let i = 0; i < totalPackets; i++) {
+    const isAttack = Math.random() * 100 < attackPct;
+    const pkt = {
+      id: i,
+      key: `flow_${i}_${Math.floor(Math.random()*9999)}`,
+      isAttack
+    };
+    packets.push(pkt);
+    if (isAttack) attackPackets.push(i);
+  }
+
+  // Track first 20 attack packets as forensic evidence
+  trackedAttacks = attackPackets.slice(0, 20);
+
+  log('insert', `Generated ${totalPackets} packets — ${attackPackets.length} attacks (${attackPct}%)`);
+  log('attack', `Tracking ${trackedAttacks.length} attack packets as forensic evidence`);
+}
+
+// ─────────────────────────────────────────
+// SIMULATION STEP
+// ─────────────────────────────────────────
+function step() {
+  if (packetIdx >= packets.length) {
+    finishSim();
+    return;
+  }
+
+  const pkt = packets[packetIdx];
+  const bucketIdx = Math.floor(Math.random() * BLOOM_BUCKETS);
+  const cBucketIdx = Math.floor(Math.random() * CUCKOO_BUCKETS);
+
+  // ── BLOOM FILTER ──
+  if (bloomState.count >= capacity) {
+    // WIPE!
+    bloomState.cells = new Array(BLOOM_BUCKETS).fill(0);
+    bloomState.count = 0;
+    bloomState.wipes++;
+    // Flash
+    const flash = document.getElementById('bloom-flash');
+    flash.classList.remove('active');
+    void flash.offsetWidth;
+    flash.classList.add('active');
+    log('wipe', `💥 BLOOM FILTER WIPED! (Wipe #${bloomState.wipes}) — All evidence LOST!`);
+    updateBloomBuckets(true);
+  }
+
+  bloomState.cells[bucketIdx] = 1;
+  bloomState.count++;
+  bloomState.totalInserted++;
+  updateBloomCell(bucketIdx, 'new');
+  setTimeout(() => updateBloomCell(bucketIdx, 'filled'), 300);
+
+  // ── CUCKOO FILTER ──
+  if (cuckooState.count >= capacity * 0.9) {
+    // Sliding window — delete oldest benign
+    const toDelete = Math.max(1, Math.floor(capacity * 0.1));
+    let deleted = 0;
+    for (let i = 0; i < CUCKOO_BUCKETS && deleted < toDelete; i++) {
+      if (cuckooState.cells[i] === 1) { // benign only
+        cuckooState.cells[i] = 0;
+        cuckooState.count--;
+        cuckooState.deletes++;
+        updateCuckooCell(i, 'empty');
+        deleted++;
+      }
+    }
+    if (deleted > 0) {
+      log('delete', `↩ Sliding Window: Deleted ${deleted} oldest BENIGN entries (attacks preserved!)`);
+    }
+  }
+
+  const cellType = pkt.isAttack ? 2 : 1;
+  cuckooState.cells[cBucketIdx] = cellType;
+  cuckooState.count++;
+  cuckooState.totalInserted++;
+  updateCuckooCell(cBucketIdx, pkt.isAttack ? 'attack' : 'new');
+  if (!pkt.isAttack) setTimeout(() => updateCuckooCell(cBucketIdx, 'filled'), 300);
+
+  if (pkt.isAttack) {
+    log('attack', `⚡ Attack packet #${pkt.id} inserted — marked as is_attack=True (protected)`);
+  }
+
+  // ── UPDATE UI ──
+  updateStats();
+  packetIdx++;
+
+  const pct = (packetIdx / packets.length) * 100;
+  document.getElementById('overall-progress').style.width = pct + '%';
+  document.getElementById('progress-count').textContent = `${packetIdx} / ${packets.length} packets`;
+  document.getElementById('status-text').textContent = `Processing packet ${packetIdx}...`;
+}
+
+// ─────────────────────────────────────────
+// UPDATE BUCKET CELLS
+// ─────────────────────────────────────────
+function updateBloomCell(idx, state) {
+  const cell = document.getElementById(`bloom-cell-${idx}`);
+  if (!cell) return;
+  cell.className = 'bucket-cell';
+  if (state === 'filled') cell.classList.add('filled');
+  else if (state === 'new') cell.classList.add('new');
+  else if (state === 'wiped') cell.classList.add('wiped');
+}
+
+function updateCuckooCell(idx, state) {
+  const cell = document.getElementById(`cuckoo-cell-${idx}`);
+  if (!cell) return;
+  cell.className = 'bucket-cell';
+  if (state === 'filled') cell.classList.add('filled');
+  else if (state === 'new') cell.classList.add('new');
+  else if (state === 'attack') cell.classList.add('attack');
+}
+
+function updateBloomBuckets(wiped) {
+  for (let i = 0; i < BLOOM_BUCKETS; i++) {
+    const cell = document.getElementById(`bloom-cell-${i}`);
+    if (!cell) continue;
+    cell.className = 'bucket-cell';
+    if (wiped) cell.classList.add('wiped');
+    else if (bloomState.cells[i] === 1) cell.classList.add('filled');
+  }
+}
+
+// ─────────────────────────────────────────
+// UPDATE STATS
+// ─────────────────────────────────────────
+function updateStats() {
+  // Bloom
+  const bloomPct = Math.min(100, (bloomState.count / capacity) * 100);
+  document.getElementById('bloom-cap-fill').style.width = bloomPct + '%';
+  document.getElementById('bloom-cap-text').textContent = `${bloomState.count} / ${capacity}`;
+  document.getElementById('bloom-inserted').textContent = bloomState.totalInserted;
+  document.getElementById('bloom-wipes').textContent = bloomState.wipes;
+  document.getElementById('bloom-wipe-badge').textContent = `Wipes: ${bloomState.wipes}`;
+
+  // Cuckoo
+  const cuckooPct = Math.min(100, (cuckooState.count / capacity) * 100);
+  document.getElementById('cuckoo-cap-fill').style.width = cuckooPct + '%';
+  document.getElementById('cuckoo-cap-text').textContent = `${cuckooState.count} / ${capacity}`;
+  document.getElementById('cuckoo-inserted').textContent = cuckooState.totalInserted;
+  document.getElementById('cuckoo-deletes').textContent = cuckooState.deletes;
+
+  // Traceability — check tracked attacks
+  let bloomFound = 0, cuckooFound = 0;
+  if (trackedAttacks.length > 0) {
+    trackedAttacks.forEach(id => {
+      const bucketIdx = id % BLOOM_BUCKETS;
+      const cBucketIdx = id % CUCKOO_BUCKETS;
+      if (bloomState.cells[bucketIdx] === 1) bloomFound++;
+      if (cuckooState.cells[cBucketIdx] === 2) cuckooFound++;
+    });
+
+    const bTrace = Math.round((bloomFound / trackedAttacks.length) * 100);
+    const cTrace = Math.round((cuckooFound / trackedAttacks.length) * 100);
+
+    document.getElementById('bloom-trace').textContent = bTrace + '%';
+    document.getElementById('cuckoo-trace').textContent = cTrace + '%';
+    document.getElementById('bloom-trace-pct').textContent = bTrace + '%';
+    document.getElementById('cuckoo-trace-pct').textContent = cTrace + '%';
+    document.getElementById('bloom-trace-bar').style.width = bTrace + '%';
+    document.getElementById('cuckoo-trace-bar').style.width = cTrace + '%';
+  }
+}
+
+// ─────────────────────────────────────────
+// RUN / RESET / FINISH
+// ─────────────────────────────────────────
+function runSimulation() {
+  if (running) return;
+  resetAll();
+  generatePackets();
+  initBuckets();
+
+  running = true;
+  startTime = Date.now();
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('status-text').textContent = 'Running...';
+  log('insert', `▶ Simulation started — capacity: ${capacity}, packets: ${totalPackets}`);
+
+  simInterval = setInterval(step, animSpeed);
+}
+
+function finishSim() {
+  clearInterval(simInterval);
+  running = false;
+  document.getElementById('run-btn').disabled = false;
+  document.getElementById('status-text').textContent = 'Simulation complete ✓';
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  log('done', `✅ Done in ${elapsed}s — Bloom wipes: ${bloomState.wipes} | Cuckoo wipes: 0 | Cuckoo deletes: ${cuckooState.deletes}`);
+}
+
+function resetAll() {
+  clearInterval(simInterval);
+  running = false;
+  packetIdx = 0;
+  packets = [];
+  attackPackets = [];
+  trackedAttacks = [];
+
+  bloomState = { cells: new Array(BLOOM_BUCKETS).fill(0), count: 0, wipes: 0, totalInserted: 0 };
+  cuckooState = { cells: new Array(CUCKOO_BUCKETS).fill(0), count: 0, deletes: 0, totalInserted: 0 };
+
+  initBuckets();
+
+  document.getElementById('bloom-cap-fill').style.width = '0%';
+  document.getElementById('cuckoo-cap-fill').style.width = '0%';
+  document.getElementById('bloom-cap-text').textContent = '0 / 100';
+  document.getElementById('cuckoo-cap-text').textContent = '0 / 100';
+  document.getElementById('bloom-inserted').textContent = '0';
+  document.getElementById('bloom-wipes').textContent = '0';
+  document.getElementById('bloom-trace').textContent = '0%';
+  document.getElementById('cuckoo-inserted').textContent = '0';
+  document.getElementById('cuckoo-deletes').textContent = '0';
+  document.getElementById('cuckoo-trace').textContent = '0%';
+  document.getElementById('bloom-wipe-badge').textContent = 'Wipes: 0';
+  document.getElementById('bloom-trace-bar').style.width = '0%';
+  document.getElementById('cuckoo-trace-bar').style.width = '0%';
+  document.getElementById('bloom-trace-pct').textContent = '0%';
+  document.getElementById('cuckoo-trace-pct').textContent = '0%';
+  document.getElementById('overall-progress').style.width = '0%';
+  document.getElementById('progress-count').textContent = '0 / 0 packets';
+  document.getElementById('status-text').textContent = 'Ready to run';
+  document.getElementById('run-btn').disabled = false;
+}
+
+// ─────────────────────────────────────────
+// LOG
+// ─────────────────────────────────────────
+function log(type, msg) {
+  const entries = document.getElementById('log-entries');
+  const now = new Date();
+  const time = now.toTimeString().split(' ')[0];
+
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type}`;
+  entry.innerHTML = `<span class="log-time">${time}</span><span>${msg}</span>`;
+  entries.appendChild(entry);
+  entries.scrollTop = entries.scrollHeight;
+
+  // Keep max 100 entries
+  while (entries.children.length > 100) entries.removeChild(entries.firstChild);
+}
+
+function clearLog() {
+  document.getElementById('log-entries').innerHTML = '';
+}
+
+function setSpeed(ms, btn) {
+  animSpeed = ms;
+  document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (running) {
+    clearInterval(simInterval);
+    simInterval = setInterval(step, animSpeed);
+  }
+}
+
+// Init on load
+initBuckets();
+</script>
+</body>
+</html>
