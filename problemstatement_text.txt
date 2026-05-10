@@ -1,0 +1,274 @@
+================================================================
+  PROBLEM STATEMENT
+  Improving SDN Forensic Data Storage using Cuckoo Filters
+================================================================
+
+  Authors: Kuldeep Kumar Lakhe, Atharva Keskar, Dheeraj Makhija
+  Guide:   Prof. Shatrunjay Rawat
+  Institute: IIIT Hyderabad
+  Date:    April 2026
+
+================================================================
+  1. TITLE
+================================================================
+
+  Improving SDN Forensic Data Storage using Cuckoo Filters
+
+
+================================================================
+  2. DOMAIN
+================================================================
+
+  Software Defined Networking (SDN) | Network Forensics |
+  Information Security | Probabilistic Data Structures
+
+
+================================================================
+  3. BACKGROUND
+================================================================
+
+  Network forensics is the practice of investigating cyber
+  attacks after they occur by examining stored network logs.
+  In SDN environments, every switch generates flow logs that
+  serve as forensic evidence. The challenge is that network
+  traffic generates logs at enormous rates, and storing them
+  indefinitely is infeasible.
+
+  Bloom Filters have been proposed as an efficient solution.
+  Sharma and Rawat (2023) demonstrated that 1024 GB of raw
+  SDN logs can be compressed to just 52 MB using Bloom Filters
+  -- a 20,000:1 compression ratio. Their system was validated
+  on a Mininet-based SDN with 1 controller, 6 switches, and
+  4 hosts.
+
+  Bhondele, Rawat, and Renukuntla (2015) established the
+  concept of forensic traceability -- using Bloom Filters stored
+  at network devices to reconstruct the path of a malicious
+  packet after an attack.
+
+
+================================================================
+  4. THE PROBLEM
+================================================================
+
+  Bloom Filters suffer from a fundamental limitation: they
+  do NOT support deletion of individual entries. This creates
+  three critical problems in forensic contexts:
+
+  PROBLEM 1: CATASTROPHIC EVIDENCE LOSS
+    When a Bloom Filter reaches capacity, it must be completely
+    wiped -- all stored forensic evidence is permanently and
+    irreversibly destroyed. In our experiments, this occurred
+    4 times across 50,000 packets (offline) and 14 times across
+    6 switches (network), reducing traceability to just 2% and
+    0% respectively.
+
+  PROBLEM 2: NO SELECTIVE DELETION
+    Privacy regulations such as GDPR require selective deletion
+    of specific records. Bloom Filters cannot achieve this
+    without destroying the entire dataset.
+
+  PROBLEM 3: FORENSIC IMMUTABILITY VIOLATION
+    Even alternative approaches that use Cuckoo Filters with
+    sliding window deletion are forensically unsound, because
+    modifying forensic logs (even deleting benign entries)
+    violates evidence immutability requirements. In legal
+    proceedings, evidence must be provably untampered.
+
+  PROBLEM 4: INEFFICIENT TRACEBACK
+    Existing traceback methods (SPIE) require querying every
+    router in the network -- O(N) queries per investigation.
+    They also return only an unordered set of witnesses,
+    without the direction of the attack path.
+
+  PROBLEM 5: UNREALISTIC TOPOLOGY
+    Previous work used only linear chain topologies, which do
+    not reflect real-world hierarchical SDN deployments.
+
+  PROBLEM 6: SINGLE ATTACK SCENARIO
+    Previous experiments simulated only one attacker on one
+    path. Real networks face multiple simultaneous attacks
+    from different sources on different paths.
+
+
+================================================================
+  5. PROPOSED SOLUTION
+================================================================
+
+  We propose a four-component solution:
+
+  COMPONENT 1: CUCKOO FILTER WITH ATTACK-AWARE SLIDING WINDOW
+    Replace Bloom Filters with Cuckoo Filters. Cuckoo Filters
+    natively support deletion, enabling selective removal of
+    individual entries. Our Attack-Aware Sliding Window monitors
+    filter occupancy and, at 90% capacity, deletes only the
+    oldest benign entries while permanently preserving all
+    attack-marked evidence.
+
+  COMPONENT 2: FORENSIC FILTER MANAGER (SNAPSHOT + RESET)
+    To achieve full forensic immutability, we introduce a
+    Snapshot + Reset archival model. When the active filter
+    reaches 85% capacity, it is serialized to disk as an
+    immutable snapshot and a fresh filter takes over. Nothing
+    is ever deleted or modified. Evidence persists forever on
+    disk. This achieves 100% traceability with zero deletions.
+
+  COMPONENT 3: PARENT-POINTER TRACEBACK
+    Each switch stores the identity of the upstream switch that
+    forwarded each packet. The SDN controller can then
+    reconstruct the exact ordered attack path by walking
+    backward from the victim -- requiring only O(path length)
+    queries instead of O(N switches).
+
+  COMPONENT 4: TREE TOPOLOGY + MULTI-ATTACK SIMULATION
+    We extend the network simulation from a linear chain to a
+    hierarchical binary tree (core-aggregation-access) and
+    simulate multiple simultaneous attacks from different
+    sources on different paths.
+
+
+================================================================
+  6. OBJECTIVES
+================================================================
+
+  1. Implement a Standard Bloom Filter and an Attack-Aware
+     Cuckoo Filter for benchmarking.
+
+  2. Implement a Forensic Filter Manager using the Snapshot +
+     Reset model for immutable evidence storage.
+
+  3. Process the CIC-IDS2017 real-world dataset (50,000 packet
+     records with FTP-Patator brute-force attacks).
+
+  4. Build an SDN soft-router network simulator supporting
+     both linear and tree (core-aggregation-access) topologies.
+
+  5. Implement three traceback strategies:
+     (a) Bloom + SPIE query-all
+     (b) Cuckoo + SPIE query-all
+     (c) Cuckoo + Parent-Pointer walk-back
+
+  6. Simulate multiple simultaneous attacks from different
+     sources on the tree topology.
+
+  7. Conduct a fingerprint size sweep (8-16 bits) to quantify
+     the cost-benefit tradeoff.
+
+  8. Quantify scalability from 6 to 50 switches.
+
+
+================================================================
+  7. EXPECTED OUTCOMES
+================================================================
+
+  1. Cuckoo Filter achieves zero catastrophic wipes (vs 4 for
+     Bloom offline, 14 across the network).
+
+  2. Snapshot + Reset achieves 100% traceability with zero
+     deletions -- fully forensically sound.
+
+  3. Parent-Pointer traceback recovers the ordered attack path
+     with O(path length) queries.
+
+  4. System scales from 6 to 50 switches with 99-100% accuracy
+     while SPIE queries grow linearly and Parent-Pointer remains
+     flat.
+
+  5. All improvements achieved at negligible memory overhead
+     (~4% more RAM than Bloom Filter).
+
+
+================================================================
+  8. METHODOLOGY
+================================================================
+
+  Dataset:    CIC-IDS2017 (Tuesday working hours)
+              50,000 records: 44,807 benign + 5,193 FTP-Patator
+              100 tracked attack packets for traceability measurement
+
+  Topology:   (a) Linear: 6 switches + 4 hosts
+              (b) Tree: 7 switches (core-agg-access) + 4 hosts
+
+  Metrics:    - Traceability (% of tracked attacks found)
+              - Evidence wipes (catastrophic data loss events)
+              - Memory usage (RAM in KB)
+              - False positive rate (empirical and theoretical)
+              - Controller query count per traceback
+              - Perfect path reconstruction rate
+
+  Tools:      Python 3.13, pandas, matplotlib, mmh3, bitarray
+
+
+================================================================
+  9. REFERENCE PAPERS
+================================================================
+
+  [1] V. Sharma and S. Rawat, "Optimizing Forensic Data
+      Availability and Retention of SDN Forensic Logs by Using
+      Bloom Filter," International Conference on Information
+      Networking (ICOIN), 2023.
+
+      -- Established Bloom Filter-based SDN forensic log
+         compression. Identified Cuckoo Filters as future work.
+
+  [2] A. Bhondele, S. Rawat, and S.S.B. Renukuntla, "Network
+      Management Framework for Network Forensic Analysis,"
+      Emerging ICT for Bridging the Future, Springer, 2015.
+
+      -- Introduced content-based traceback using Bloom Filters
+         at network devices. Defined the concept of traceability.
+
+  [3] B. Fan, D.G. Andersen, M. Kaminsky, and M.D. Mitzenmacher,
+      "Cuckoo Filter: Practically Better Than Bloom," ACM
+      CoNEXT, 2014.
+
+      -- Introduced Cuckoo Filters with deletion support.
+
+  [4] A.C. Snoeren et al., "Hash-Based IP Traceback," ACM
+      SIGCOMM, 2001.
+
+      -- Introduced SPIE (Source Path Isolation Engine) for
+         single-packet IP traceback.
+
+  [5] I. Sharafaldin, A.H. Lashkari, and A.A. Ghorbani,
+      "Toward Generating a New Intrusion Detection Dataset,"
+      ICISSP, 2018.
+
+      -- Created the CIC-IDS2017 benchmark dataset.
+
+
+================================================================
+  10. KEY RESULTS ACHIEVED
+================================================================
+
+  +----------------------------+--------+---------------+----------------+
+  | Metric                     | Bloom  | Cuckoo-Delete | Snapshot+Reset |
+  +----------------------------+--------+---------------+----------------+
+  | Traceability (of 100)      |   2    |      96       |     100        |
+  | Evidence Wipes             |   4    |       0       |       0        |
+  | Deletions                  |  N/A   |   41,000      |       0        |
+  | Forensically Sound?        |  NO    |      NO       |     YES        |
+  | RAM (KB)                   | 11.70  |    12.21      |    12.21       |
+  +----------------------------+--------+---------------+----------------+
+
+  Network Traceback (6-switch linear):
+    Bloom + SPIE:            0/100 success
+    Cuckoo + SPIE:         100/100 success
+    Cuckoo + Parent-Pointer: 97/100 success (79/100 ordered)
+
+  Tree Topology (7-switch, 2 simultaneous attacks):
+    Bloom + SPIE:            1/100 success
+    Cuckoo + Parent-Pointer: 100/100 success
+
+  Scalability (50 switches):
+    SPIE: 50 queries/traceback
+    Parent-Pointer: 3 queries/traceback (17x reduction)
+
+  Fingerprint Sweep (all achieve 100% with Snapshot+Reset):
+    10-bit: FPR 0.78%, RAM 12.21 KB (baseline)
+    16-bit: FPR 0.01%, RAM 19.53 KB (+60%)
+
+
+================================================================
+  END OF PROBLEM STATEMENT
+================================================================

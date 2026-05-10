@@ -1,0 +1,4 @@
+pandas
+matplotlib
+mmh3
+bitarray
